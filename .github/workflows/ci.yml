@@ -1,0 +1,43 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends imagemagick
+      - name: Validate PNGs decode without error
+        shell: bash
+        run: |
+          set -e
+          shopt -s nullglob
+          fail=0
+          for f in *.png **/*.png; do
+            [ -f "$f" ] || continue
+            if ! identify "$f" >/dev/null 2>&1; then
+              echo "INVALID: $f"; fail=1
+            else
+              dims=$(identify -format '%wx%h' "$f")
+              echo "OK $dims $f"
+            fi
+          done
+          exit $fail
+      - name: Check social preview aspect ratio (og.png, banner-twitter.png)
+        shell: bash
+        run: |
+          for f in og.png banner-twitter.png; do
+            if [ -f "$f" ]; then
+              w=$(identify -format '%w' "$f"); h=$(identify -format '%h' "$f")
+              echo "$f ${w}x${h}"
+              ok=$(awk -v w=$w -v h=$h 'BEGIN { r=w/h; print (r > 1.8 && r < 2.2) }')
+              if [ "$ok" != "1" ]; then
+                echo "WARN: $f aspect ratio not ~2:1 (expected for social preview)"
+              fi
+            fi
+          done
